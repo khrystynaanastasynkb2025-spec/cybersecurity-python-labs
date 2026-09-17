@@ -13,7 +13,6 @@ from shared.student import GROUP_NAME, STUDENT_NAME, VARIANT_NUMBER
 class ValidationError(Exception):
     pass
 
-
 HASH_ALGORITHM = "sha3_512"
 MIN_PASSWORD_LENGTH = 12
 
@@ -40,19 +39,22 @@ def log_event(func):
             "kwargs": kwargs,
         }
 
-        os.makedirs(DATA_DIR, exist_ok=True)
-        logs = []
-        if os.path.exists(LOG_JSON_PATH):
-            try:
-                with open(LOG_JSON_PATH, "r", encoding="utf-8") as f:
-                    logs = json.load(f)
-            except (json.JSONDecodeError, OSError):
-                logs = []
+        try:
+            os.makedirs(DATA_DIR, exist_ok=True)
+            logs = []
+            if os.path.exists(LOG_JSON_PATH):
+                try:
+                    with open(LOG_JSON_PATH, "r", encoding="utf-8") as f:
+                        logs = json.load(f)
+                except (json.JSONDecodeError, OSError):
+                    logs = []
 
-        logs.append(log_entry)
+            logs.append(log_entry)
 
-        with open(LOG_JSON_PATH, "w", encoding="utf-8") as f:
-            json.dump(logs, f, indent=4, ensure_ascii=False)
+            with open(LOG_JSON_PATH, "w", encoding="utf-8") as f:
+                json.dump(logs, f, indent=4, ensure_ascii=False)
+        except (OSError, PermissionError) as e:
+            print(f"Помилка запису логів: {e}")
 
         return result_bool
 
@@ -78,7 +80,6 @@ def create_user(username: str, password: str) -> tuple:
 
 
 def create_users(users_list: list):
-    os.makedirs(DATA_DIR, exist_ok=True)
     records = []
     for uname, pwd in users_list:
         try:
@@ -86,10 +87,14 @@ def create_users(users_list: list):
         except (ValueError, ValidationError) as e:
             print(f"Помилка створення користувача {uname}: {e}")
 
-    with open(USERS_CSV_PATH, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["username", "password_hash"])
-        writer.writerows(records)
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        with open(USERS_CSV_PATH, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["username", "password_hash"])
+            writer.writerows(records)
+    except (FileNotFoundError, PermissionError, OSError) as e:
+        print(f"Системна помилка при збереженні користувачів: {e}")
 
 
 def load_users_db() -> list:
@@ -97,29 +102,36 @@ def load_users_db() -> list:
     if not os.path.exists(USERS_CSV_PATH):
         return users_db
 
-    with open(USERS_CSV_PATH, "r", encoding="utf-8") as f:
-        reader = csv.reader(f)
-        next(reader, None)
-        for row in reader:
-            if row:
-                users_db.append(row)
+    try:
+        with open(USERS_CSV_PATH, "r", encoding="utf-8") as f:
+            reader = csv.reader(f)
+            next(reader, None)
+            for row in reader:
+                if row:
+                    users_db.append(row)
+    except (FileNotFoundError, PermissionError, OSError) as e:
+        print(f"Системна помилка при зчитуванні бази даних: {e}")
+
     return users_db
 
 
 @log_event
 def login(username: str, password: str) -> bool:
-    if not username or not password:
-        raise ValueError("Логін та пароль є обов'язковими.")
-
-    users_db = load_users_db()
     try:
-        current_hash = generate_hash(password, SALT)
-    except (ValueError, ValidationError):
-        return False
+        if not username or not password:
+            raise ValueError("Логін та пароль є обов'язковими.")
 
-    for db_user, db_hash in users_db:
-        if db_user == username and db_hash == current_hash:
-            return True
+        users_db = load_users_db()
+        current_hash = generate_hash(password, SALT)
+
+        for db_user, db_hash in users_db:
+            if db_user == username and db_hash == current_hash:
+                return True
+    except (ValueError, ValidationError) as e:
+        print(f"Помилка входу для {username}: {e}")
+    except (FileNotFoundError, PermissionError, OSError) as e:
+        print(f"Системна помилка при спробі входу: {e}")
+
     return False
 
 
@@ -141,28 +153,19 @@ def main():
         ("user10", "FinalPassword#10"),
     ]
 
-    try:
-        print("Реєстрація користувачів")
-        create_users(users_to_register)
+    print("Реєстрація користувачів")
+    create_users(users_to_register)
 
-        print("\nЧитання CSV бази")
-        db_data = load_users_db()
-        print(f"{'Логін':<15} | {'Хеш пароля':<30}")
-        print("-" * 50)
-        for u, h in db_data:
-            print(f"{u:<15} | {h[:27]}...")
+    print("\nЧитання CSV бази")
+    db_data = load_users_db()
+    print(f"{'Логін':<15} | {'Хеш пароля':<30}")
+    print("-" * 50)
+    for u, h in db_data:
+        print(f"{u:<15} | {h[:27]}...")
 
-        print("\nСпроби входу")
-        print("Вхід user01 (вірно):", login("user01", "SecurePass123!"))
-        print("Вхід user01 (невірно):", login("user01", "WrongPassword!"))
-
-    except (
-        FileNotFoundError,
-        PermissionError,
-        OSError,
-        ValueError,
-    ) as e:
-        print(f"Системна помилка: {e}")
+    print("\nСпроби входу")
+    print("Вхід user01 (вірно):", login("user01", "SecurePass123!"))
+    print("Вхід user01 (невірно):", login("user01", "WrongPassword!"))
 
 
 if __name__ == "__main__":
