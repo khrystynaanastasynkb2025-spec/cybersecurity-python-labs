@@ -83,3 +83,5 @@ python -m labs.lab02.task2 --log-file labs/lab02/data/access.log --output labs/l
 ruff check .
 ruff format --check .
 ```
+
+посилання на коміт: https://github.com/khrystynaanastasynkb2025-spec/cybersecurity-python-labs/commit/06d2dce8eb4bd35c20853546500879344ce53759
