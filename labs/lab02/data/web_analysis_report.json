@@ -1,0 +1,74 @@
+{
+    "total_entries": 68,
+    "top_error_ips": [
+        {
+            "ip": "203.0.113.99",
+            "errors": 18,
+            "details": {
+                "401": 2,
+                "400": 4,
+                "404": 9,
+                "403": 2,
+                "500": 1
+            }
+        },
+        {
+            "ip": "192.0.2.11",
+            "errors": 7,
+            "details": {
+                "401": 3,
+                "500": 1,
+                "400": 2,
+                "404": 1
+            }
+        },
+        {
+            "ip": "192.0.2.10",
+            "errors": 4,
+            "details": {
+                "500": 2,
+                "403": 1,
+                "400": 1
+            }
+        },
+        {
+            "ip": "203.0.113.45",
+            "errors": 3,
+            "details": {
+                "400": 1,
+                "404": 1,
+                "403": 1
+            }
+        },
+        {
+            "ip": "198.51.100.23",
+            "errors": 3,
+            "details": {
+                "403": 2,
+                "404": 1
+            }
+        }
+    ],
+    "attacks": [
+        {
+            "ip": "203.0.113.99",
+            "attack": "Directory Traversal",
+            "uri": "/../../etc/passwd"
+        },
+        {
+            "ip": "203.0.113.99",
+            "attack": "Directory Traversal",
+            "uri": "/download?file=../../../etc/shadow"
+        },
+        {
+            "ip": "203.0.113.99",
+            "attack": "XSS",
+            "uri": "/search?q=<script>alert(1)</script>"
+        },
+        {
+            "ip": "203.0.113.99",
+            "attack": "XSS",
+            "uri": "/comment?text=%3Cscript%3Ealert(1)%3C/script%3E"
+        }
+    ]
+}

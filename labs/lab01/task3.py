@@ -13,6 +13,7 @@ from shared.student import GROUP_NAME, STUDENT_NAME, VARIANT_NUMBER
 class ValidationError(Exception):
     pass
 
+
 HASH_ALGORITHM = "sha3_512"
 MIN_PASSWORD_LENGTH = 12
 
@@ -34,7 +35,9 @@ def log_event(func):
             "event": "login",
             "user": username,
             "result": result_str,
-            "timestamp": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": datetime.datetime.now(datetime.timezone.utc).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            ),
             "args": list(args),
             "kwargs": kwargs,
         }
