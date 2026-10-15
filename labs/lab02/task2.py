@@ -7,21 +7,23 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
-#налаштування структурованого логування
+# налаштування структурованого логування
 logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 
 def parse_log_line(line: str) -> dict | None:
     pattern = r'^(\S+) \S+ \S+ \[([\w:/]+\s[+\-]\d{4})\] "([A-Z]+) ([^"]+) HTTP/[\d.]+" (\d{3}) (\S+)'
-    match = re.match(pattern, line)
+    match = re.match(pattern, line)  # перевіряє чи відповідає шаблону
     if not match:
         return None
 
     ip, dt_str, method, uri, status, size = match.groups()
 
     try:
-        log_time = datetime.strptime(dt_str, "%d/%b/%Y:%H:%M:%S %z")
+        log_time = datetime.strptime(
+            dt_str, "%d/%b/%Y:%H:%M:%S %z"
+        )  # перетвроює текст на дату,час
     except ValueError:
         log_time = None
 
@@ -37,7 +39,6 @@ def parse_log_line(line: str) -> dict | None:
 
 def detect_attacks(uri: str) -> list[str]:
     attacks = []
-    # Сигнатури атак
     if re.search(r"(union\s+select|or\s+1=1|[';]--)", uri, re.IGNORECASE):
         attacks.append("SQLi")
     if re.search(r"(\.\./|\.\.\\|/etc/passwd)", uri):
@@ -47,32 +48,40 @@ def detect_attacks(uri: str) -> list[str]:
     return attacks
 
 
-def analyze_access_log(
+def analyze_access_log(  # функція об'єднює всі попередні
     log_path: Path, output_path: Path, min_status: int, top_n: int, file_format: str
 ):
-    if not log_path.exists():
+    if not log_path.exists():  # перевіряє існування файлу
         logger.error(f"Файл логу не знайдено за шляхом: {log_path}")
         return
 
     logger.info(f"Loading access log from {log_path}")
 
-    entries = []
+    entries = []  # список усіх успішно розібраних записів
     min_time = None
     max_time = None
 
-    with open(log_path, "r", encoding="utf-8") as f:
-        for line in f:
-            parsed = parse_log_line(line.strip())
-            if parsed:
-                entries.append(parsed)
-                if parsed["datetime"]:
-                    if min_time is None or parsed["datetime"] < min_time:
-                        min_time = parsed["datetime"]
-                    if max_time is None or parsed["datetime"] > max_time:
-                        max_time = parsed["datetime"]
-
-    if not entries:
-        logger.warning("Не вдалося розірвати жодного рядка логу.")
+    try:
+        with open(log_path, "r", encoding="utf-8") as f:
+            for line in f:
+                parsed = parse_log_line(line.strip())
+                if parsed:
+                    entries.append(parsed)  # якщо розібрав то додаємо у список
+                    if parsed["datetime"]:
+                        if min_time is None or parsed["datetime"] < min_time:
+                            min_time = parsed["datetime"]
+                        if max_time is None or parsed["datetime"] > max_time:
+                            max_time = parsed["datetime"]
+    except UnicodeDecodeError as e:
+        logger.error(
+            f"Помилка кодування файлу ({log_path}): файл не в форматі utf-8. Деталі: {e}"
+        )
+        return
+    except IOError as e:
+        logger.error(f"Помилка введення-виведення при читанні файлу ({log_path}): {e}")
+        return
+    except Exception as e:
+        logger.error(f"Непередбачена помилка під час читання файлу логу: {e}")
         return
 
     min_time_str = min_time.strftime("%Y-%m-%d %H:%M:%S") if min_time else "N/A"
@@ -81,9 +90,9 @@ def analyze_access_log(
         f"Processed {len(entries)} log entries from {min_time_str} to {max_time_str}."
     )
 
-    #аналіз помилок та підрахунок через counter
+    # аналіз помилок та підрахунок через counter
     error_ips = Counter()
-    ip_status_details = {}  #IP - Counter(status_code)
+    ip_status_details = {}  # IP - Counter(status_code)
     detected_attacks_list = []
 
     for entry in entries:
@@ -91,13 +100,13 @@ def analyze_access_log(
         ip = entry["ip"]
         uri = entry["uri"]
 
-        if status >= min_status:
+        if status >= min_status:  # перевірка статусу
             error_ips[ip] += 1
             if ip not in ip_status_details:
                 ip_status_details[ip] = Counter()
             ip_status_details[ip][status] += 1
 
-        #пошук атак
+        # пошук атак
         attacks = detect_attacks(uri)
         for attack in attacks:
             detected_attacks_list.append({"ip": ip, "attack": attack, "uri": uri})
@@ -118,7 +127,7 @@ def analyze_access_log(
             f'[ALERT] Potential {item["attack"]} attack from {item["ip"]}: "GET {item["uri"]}"'
         )
 
-    #збереження звіту
+    # збереження звіту
     report_data = {
         "total_entries": len(entries),
         "top_error_ips": [
@@ -127,25 +136,31 @@ def analyze_access_log(
         ],
         "attacks": detected_attacks_list,
     }
+    try:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+        if file_format == "json":
+            with open(output_path, "w", encoding="utf-8") as out_f:
+                json.dump(report_data, out_f, indent=4, ensure_ascii=False)
+        elif file_format == "csv":
+            with open(output_path, "w", newline="", encoding="utf-8") as out_f:
+                writer = csv.writer(out_f)
+                writer.writerow(["IP", "Error Count", "Status Breakdown"])
+                for ip, count in top_error_ips:
+                    breakdown = str(dict(ip_status_details[ip]))
+                    writer.writerow([ip, count, breakdown])
 
-    if file_format == "json":
-        with open(output_path, "w", encoding="utf-8") as out_f:
-            json.dump(report_data, out_f, indent=4, ensure_ascii=False)
-    elif file_format == "csv":
-        with open(output_path, "w", newline="", encoding="utf-8") as out_f:
-            writer = csv.writer(out_f)
-            writer.writerow(["IP", "Error Count", "Status Breakdown"])
-            for ip, count in top_error_ips:
-                breakdown = str(dict(ip_status_details[ip]))
-                writer.writerow([ip, count, breakdown])
+        logger.info(f"Analysis report saved to {output_path}")
 
-    logger.info(f"Analysis report saved to {output_path}")
-
+    except IOError as e:
+        logger.error(
+            f"Помилка введення-виведення при збереженні файлу ({output_path}): {e}"
+        )
+    except Exception as e:
+        logger.error(f"Сталася непередбачена помилка під час збереження звіту: {e}")
 
 def main():
-    parser = argparse.ArgumentParser(
+    parser = argparse.ArgumentParser(  # створює об'єкт який дозволяє передавати програмі параметри через командний рядок
         description="Аналізатор журналів веб-сервера (Nginx/Apache)"
     )
     parser.add_argument(

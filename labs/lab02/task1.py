@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-# Іменована константа для кількості ітерацій хешування пароля
+#іменована константа для кількості ітерацій хешування пароля
 PBKDF2_ITERATIONS = 100_000
 SESSION_TIMEOUT_SEC = 900
 
